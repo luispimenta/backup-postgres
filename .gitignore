@@ -1,0 +1,9 @@
+# Ignorar arquivos de dependências
+/node_modules
+
+# Ignorar arquivos de backup temporários
+*.sql
+*.zip
+
+# Variáveis de ambiente
+.env
