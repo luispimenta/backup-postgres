@@ -1,9 +1,8 @@
 const cron = require('node-cron');
 const { spawn } = require('child_process');
-const AWS = require('aws-sdk');
 const archiver = require('archiver');
 const fs = require('fs');
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 require('dotenv').config();
 
@@ -21,7 +20,7 @@ const {
   AWS_S3_BUCKET
 } = process.env;
 
-// Configura o AWS SDK
+// Configura o AWS SDK v3 (correto)
 const client = new S3Client({
   region: AWS_REGION,
   credentials: {
@@ -31,15 +30,17 @@ const client = new S3Client({
 });
 
 const uploadFileToS3 = async (params) => {
-  const upload = new Upload({
-    client: client,
-    params: params,
-  });
-  return await upload.done();
+  try {
+    const upload = new Upload({
+      client: client,
+      params: params,
+    });
+    return await upload.done();
+  } catch (error) {
+    console.error('Erro durante o upload para o S3:', error);
+    throw error;
+  }
 };
-
-
-const s3 = new AWS.S3();
 
 const runBackup = async () => {
   const date = new Date().toISOString().slice(0, 10);
@@ -94,7 +95,7 @@ const runBackup = async () => {
       archive.finalize();
     });
   })
-  .then(() => {
+  .then(async () => { // Adicionado 'async' para o 'await' funcionar
     console.log('Iniciando upload para o S3...');
     // 3. Faz o upload para o S3
     const fileContent = fs.readFileSync(archiveFilePath);
@@ -104,10 +105,12 @@ const runBackup = async () => {
       Body: fileContent
     };
 
-    return uploadFileToS3(params);
+    return await uploadFileToS3(params);
   })
   .then((data) => {
-    console.log(`Upload para o S3 concluído. Localização: ${data.Location}`);
+    console.log(`Upload para o S3 concluído.`);
+    // A v3 não retorna Location. Você pode inspecionar `data` para mais detalhes
+    console.log(data);
   })
   .catch((err) => {
     console.error('Erro no processo de backup:', err);
