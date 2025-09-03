@@ -3,7 +3,6 @@ const { spawn } = require('child_process');
 const AWS = require('aws-sdk');
 const archiver = require('archiver');
 const fs = require('fs');
-const AWS = require('aws-sdk');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 require('dotenv').config();
