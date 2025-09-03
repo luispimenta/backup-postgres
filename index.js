@@ -3,6 +3,9 @@ const { spawn } = require('child_process');
 const AWS = require('aws-sdk');
 const archiver = require('archiver');
 const fs = require('fs');
+const AWS = require('aws-sdk');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { Upload } = require('@aws-sdk/lib-storage');
 require('dotenv').config();
 
 const {
@@ -20,11 +23,22 @@ const {
 } = process.env;
 
 // Configura o AWS SDK
-AWS.config.update({
-  accessKeyId: AWS_ACCESS_KEY_ID,
-  secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  region: AWS_REGION
+const client = new S3Client({
+  region: AWS_REGION,
+  credentials: {
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  },
 });
+
+const uploadFileToS3 = async (params) => {
+  const upload = new Upload({
+    client: client,
+    params: params,
+  });
+  return await upload.done();
+};
+
 
 const s3 = new AWS.S3();
 
@@ -91,7 +105,7 @@ const runBackup = async () => {
       Body: fileContent
     };
 
-    return s3.upload(params).promise();
+    return uploadFileToS3(params);
   })
   .then((data) => {
     console.log(`Upload para o S3 concluído. Localização: ${data.Location}`);
