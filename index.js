@@ -4,6 +4,7 @@ const archiver = require('archiver');
 const fs = require('fs');
 const { S3Client } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
+const { Readable } = require('stream');
 require('dotenv').config();
 
 const {
@@ -42,23 +43,26 @@ const runBackup = async () => {
     '-p', PGPORT,
     '-U', PGUSER,
     '-d', PGDATABASE,
-    '-F', 'p', // Formato "plain text"
+    '-F', 'p',
   ], {
     env: { PGPASSWORD }
   });
 
+  const passThrough = new Readable.PassThrough();
   const archive = archiver('zip', {
-    zlib: { level: 9 } // Nível de compressão
+    zlib: { level: 9 }
   });
 
-  // O archiver recebe o stream do pg_dump
+  // Pipe do pg_dump para o archiver, e do archiver para o passThrough
+  dumpProcess.stdout.pipe(archive);
+  archive.pipe(passThrough);
+
   archive.append(dumpProcess.stdout, { name: backupFileName });
 
-  // 1. Faz o upload para o S3 diretamente do stream do archiver
   const params = {
     Bucket: AWS_S3_BUCKET,
     Key: `backups/${archiveFileName}`,
-    Body: archive, // Passamos o stream do archiver para o S3
+    Body: passThrough,
   };
 
   try {
@@ -71,11 +75,11 @@ const runBackup = async () => {
     const data = await upload.done();
     console.log(`Upload para o S3 concluído.`);
     console.log(data);
-
-    archive.finalize(); // Finaliza o archiver após o upload
   } catch (err) {
     console.error('Erro no processo de backup:', err);
-    archive.destroy(); // Limpa o archiver em caso de erro
+    passThrough.destroy();
+    archive.destroy();
+    dumpProcess.kill();
     throw err;
   }
 };
@@ -83,13 +87,13 @@ const runBackup = async () => {
 // Executa o backup imediatamente se RUN_ON_DEPLOY for 'true'
 if (RUN_ON_DEPLOY === 'true') {
   console.log('Executando backup inicial após o deploy...');
-  runBackup().catch(() => {}); // Adiciona um catch para evitar crash
+  runBackup().catch(() => {});
 }
 
 // Agenda a tarefa diária
 cron.schedule(CRON_SCHEDULE, () => {
   console.log('Tarefa agendada: Executando backup diário.');
-  runBackup().catch(() => {}); // Adiciona um catch para evitar crash
+  runBackup().catch(() => {});
 }, {
   scheduled: true,
   timezone: 'America/Sao_Paulo'
